@@ -58,3 +58,12 @@ Distinguish mock tests from real integrations in the validation report.
 
 Installer artifacts and disposable fixtures belong outside scanned worktrees.
 Runtime scans and doctor require no network and must not mutate repository state.
+
+## Completion
+
+All four standalone checkpoints are complete. The final suite ran 85 cases
+(84 passed, one expected macOS skip), the optional reference harness passed 36
+comparisons, and full toolkit self-scans and current-PATH doctor checks passed.
+See `VALIDATION.md` for evidence, architecture decisions, commit checkpoints,
+known engine differences, and compatibility limits. Linux/hosted CI execution
+and the separate Hammerspoon migration have not been performed.

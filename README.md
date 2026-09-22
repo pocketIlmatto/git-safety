@@ -56,16 +56,17 @@ running `git-safety --version`. Repository policy and opt-in hooks are left in
 place. Keep the dedicated installation checkout clean when changing it to a
 new verified commit; rollback uses the same method. The installer refuses a
 symlink owned by a different checkout, so uninstall the old symlink before
-installing from a new checkout. To remove the CLI symlink, run:
+installing from a new checkout. For complete removal, first run
+`git-safety uninstall-hook` in each opted-in repository. Then remove the CLI
+symlink:
 
 ```sh
 <INSTALL_ROOT>/scripts/uninstall --bin-dir "$HOME/.local/bin"
 ```
 
 Uninstallation removes only the symlink owned by this tool and refuses a
-collision or replacement it does not own. Remove repository hooks separately
-with `git-safety uninstall-hook`; that command also removes only a byte-for-byte
-tool-owned hook.
+collision or replacement it does not own. Hook removal also removes only a
+byte-for-byte tool-owned hook. Repository policy is preserved by both commands.
 
 ## Repository setup
 
@@ -171,8 +172,8 @@ exempt another private value on that line. Rules and exceptions use
 case-insensitive ripgrep-compatible regular expressions; blank and comment
 lines are ignored and both files are validated even when no content is found.
 Escape literal identifiers as regular expressions require. For example,
-`alice+test@example.com` becomes `alice\\+test@example\\.com`; an anchored safe
-placeholder exception can be `^[A-Za-z0-9._%+-]+@example\\.(com|org|net)$`.
+`alice+test@example.com` becomes `alice\+test@example\.com`; an anchored safe
+placeholder exception can be `^[A-Za-z0-9._%+-]+@example\.(com|org|net)$`.
 Keep exceptions narrow and value-specific.
 
 Privacy policy files themselves have exact path exemptions for the current
