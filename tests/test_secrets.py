@@ -155,6 +155,23 @@ class RealGitleaksTests(unittest.TestCase):
         self.git("commit", "-qm", "Binary synthetic fixture")
         self.scan("history", 1)
 
+    def test_native_staged_binary_limitation_is_explicit(self):
+        self.write(b"*.txt -diff\n", ".gitattributes")
+        self.write(TOKEN)
+        # The native Gitleaks staged engine skips a diff marked binary. Privacy
+        # forced-text checks and our forced-text secret history do not share it.
+        self.scan("staged", 0)
+        self.scan("worktree", 1)
+
+    def test_direct_shallow_history_is_incomplete(self):
+        self.write(b"clean\n")
+        self.git("commit", "-qm", "Initial")
+        with tempfile.TemporaryDirectory(prefix="git-safety-shallow-") as directory:
+            destination = Path(directory) / "clone"
+            self.git("clone", "--depth=1", self.root.as_uri(), str(destination))
+            with self.assertRaises(SafetyError):
+                secrets.scan(destination, "history")
+
     def test_symlinked_parent_fails_closed(self):
         self.write(b"clean", "directory/file.txt")
         shutil.rmtree(self.root / "directory")

@@ -112,7 +112,7 @@ def doctor(root):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Scan publishable Git content with privacy rules and Gitleaks.")
+    parser = argparse.ArgumentParser(prog="git-safety", description="Scan publishable Git content with privacy rules and Gitleaks.")
     parser.add_argument("--version", action="version", version="git-safety " + __version__)
     parser.add_argument("command", nargs="?", default="all", choices=(
         "staged", "worktree", "history", "all", "init", "install-hook", "uninstall-hook", "doctor"))

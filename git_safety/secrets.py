@@ -119,6 +119,8 @@ def scan(root, mode):
             raise SafetyError("unmerged index entries; staged secret scan incomplete")
         return _invoke(root, ["git", "--staged", str(root)])
     if mode == "history":
+        if git(root, "rev-parse", "--is-shallow-repository").strip() == b"true":
+            raise SafetyError("shallow history; secret scan incomplete")
         if not git(root, "rev-list", "--all").strip():
             validate_config(root)
             return 0
