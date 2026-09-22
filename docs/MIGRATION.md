@@ -29,6 +29,12 @@ workflow behavior. Preserve consumer-specific identifiers in
 `.git-safety/privacy-patterns` or secure local policy, using safe placeholders in
 public examples.
 
+For consumers with public Bear URL rules, preserve the rule while replacing
+real account or host values with a documented placeholder. Create precise
+ignore entries first, before moving local policy files; then copy local rules
+only through the consumer's secure, ignored path. Never copy private values
+into public policy, fixtures, documentation, or logs.
+
 Preserve existing `.gitleaks.toml` and `.gitleaksignore` semantics. The toolkit
 uses native Gitleaks environment precedence, then the repository root config,
 and honors `.gitleaksignore`; privacy allowlists do not suppress Gitleaks.
@@ -89,4 +95,3 @@ If a scan finds a credential, revoke or rotate it through its owning service
 before deciding whether history cleanup is needed. `git-safety` does not rotate
 credentials or rewrite history. Treat history rewriting, force-pushes, branch
 protection changes, and remote cleanup as separate authorized operations.
-

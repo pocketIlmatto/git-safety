@@ -5,8 +5,9 @@ combines a byte-safe privacy scanner with Gitleaks and provides opt-in Git hook
 integration. It is designed to run locally and in CI without changing Git
 history, fetching objects, or changing global Git configuration.
 
-The toolkit is still being integrated. Treat the exact commit used by a
-consumer as the versioned artifact until a release process is established.
+This is an initially validated local release; no public release channel has
+been established. Treat the exact commit used by a consumer as the versioned
+artifact.
 Replace `<VERIFIED_COMMIT>` and `<INSTALL_ROOT>` in the examples below with
 values chosen by the consuming project; this repository does not publish a
 repository URL or release channel.
@@ -44,10 +45,18 @@ The source URL above is intentionally a placeholder. Pin the tool checkout and
 the Gitleaks 8.30.1 binary in CI, and verify checksums using the release
 process adopted by the consuming project.
 
+On macOS with Homebrew, use `brew install python ripgrep gitleaks` as a
+starting point, then verify `gitleaks version` reports exactly 8.30.1. If
+Homebrew supplies another version, obtain the pinned release through the
+consumer's verified dependency process. Linux needs Git, Bash, Python,
+ripgrep, and Gitleaks; it does not need Lua or Hammerspoon.
+
 Upgrade by installing a new verified checkout with `scripts/install` and then
 running `git-safety --version`. Repository policy and opt-in hooks are left in
-place. To roll back, point the installation checkout at the previous verified
-commit and rerun the installer. To remove the CLI symlink, run:
+place. Keep the dedicated installation checkout clean when changing it to a
+new verified commit; rollback uses the same method. The installer refuses a
+symlink owned by a different checkout, so uninstall the old symlink before
+installing from a new checkout. To remove the CLI symlink, run:
 
 ```sh
 <INSTALL_ROOT>/scripts/uninstall --bin-dir "$HOME/.local/bin"
@@ -84,7 +93,10 @@ allowlists in public policy.
 
 The pre-commit hook is repository opt-in. It delegates to `git-safety staged`,
 does not contain scanner logic, does not set global `core.hooksPath`, and
-refuses to replace an existing hook or unsafe hook configuration. Hooks can be
+refuses inherited or external hook paths and an existing pre-commit hook.
+Linked worktrees can share the effective default hooks directory; inspect it
+before installation. Compose an existing hook manually when needed, preserving
+all other hook actions. Hooks can be
 bypassed with `git commit --no-verify`; required CI branch checks are a separate
 repository setting.
 
@@ -129,16 +141,18 @@ refs. The Gitleaks invocation uses:
 --all --full-history --root --no-renames --no-ext-diff --no-textconv --text -m
 ```
 
-It does not fetch missing objects. A shallow repository is incomplete and
-returns `2`; fetch the required history separately, then rerun the scan.
+It does not fetch missing objects. A shallow or partial/promisor repository is
+incomplete and returns `2`; fetch or reclone the required full history
+separately, then rerun the scan. The tool never auto-fetches.
 Privacy history deduplicates blob contents and reports a representative
 commit/path. History excludes unreachable objects, reflogs, commit metadata and
 messages, and recursively separate submodules.
 
 `all` runs staged, worktree, and history coverage. `doctor` checks repository
 context, dependency visibility, policy readability and syntax, effective hook
-configuration, CLI visibility (including the current process PATH used by GUI
-clients), and whether local policy files are ignored and untracked. It never
+configuration, CLI visibility for the current process only (GUI clients must
+be checked separately), and whether local policy files are ignored and
+untracked. It never
 prints local policy contents. If a GUI client has a different PATH, repair that
 client's environment and rerun diagnosis; a terminal PATH change cannot verify
 the GUI process.
@@ -156,14 +170,24 @@ are evaluated against each matched value. A placeholder on a line does not
 exempt another private value on that line. Rules and exceptions use
 case-insensitive ripgrep-compatible regular expressions; blank and comment
 lines are ignored and both files are validated even when no content is found.
-Escape literal identifiers as regular expressions require. Keep exceptions
-narrow and value-specific.
+Escape literal identifiers as regular expressions require. For example,
+`alice+test@example.com` becomes `alice\\+test@example\\.com`; an anchored safe
+placeholder exception can be `^[A-Za-z0-9._%+-]+@example\\.(com|org|net)$`.
+Keep exceptions narrow and value-specific.
 
 Privacy policy files themselves have exact path exemptions for the current
 `.git-safety/` names and the legacy root-level names. This prevents examples in
 policy from self-matching; it is not an exemption for the policy directory or
 for secrets. Gitleaks retains its own detection behavior and does not inherit
 privacy allowlists or these path exemptions.
+
+The exact exempt paths are `.git-safety/privacy-patterns`,
+`.git-safety/privacy-patterns.local`, `.git-safety/privacy-patterns.local.example`,
+`.git-safety/privacy-allowlist`, `.git-safety/privacy-allowlist.local`, and the
+legacy `.privacy-patterns`, `.privacy-patterns.local`,
+`.privacy-patterns.local.example`, `.privacy-allowlist`, and
+`.privacy-allowlist.local`. Empty public files are valid and retain built-ins;
+missing required files, malformed regexes, and unreadable policy return `2`.
 
 Gitleaks configuration follows native environment precedence (`GITLEAKS_CONFIG`
 or `GITLEAKS_CONFIG_TOML`), then a root `.gitleaks.toml` when present, then
@@ -207,3 +231,5 @@ Run the repository's regression tests with Python's standard test runner. Keep
 fixtures synthetic and outside scanned worktrees. Do not claim hosted CI or a
 consumer migration unless it was actually run and reviewed.
 
+From a development checkout, `scripts/check` runs the local test and validation
+checks.
