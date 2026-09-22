@@ -1,6 +1,6 @@
 # git-safety
 
-Check a Git project for private information and secrets before you commit or
+This is a Git project for private information and secrets before you commit or
 share it. `git-safety` looks for things such as personal file paths and email
 addresses, and uses Gitleaks to find credentials such as API keys.
 
@@ -102,7 +102,7 @@ git-safety install-hook
 A **pre-commit hook** is a script Git runs before creating a commit. This one
 runs `git-safety staged`. If the project already has a hook, installation stops
 and leaves it alone; see [hook setup](docs/REFERENCE.md#hooks) before combining
-them. Repeat project setup in each clone where you want these checks enabled.
+them. Each developer needs to run git-safety install-hook in their local copy of the project to enable automatic checks before commits.
 
 ## Everyday use
 
@@ -139,7 +139,7 @@ For example, a literal identifier containing a dot needs an escaped dot:
 internal-project\.example
 ```
 
-Rules are case-insensitive. Empty lines and lines beginning with `#` are ignored.
+Rules are case-insensitive. Empty lines and lines beginning with `#` in the rule files are ignored.
 The built-in rules stay active even if your project rule files are empty.
 
 For rules that should stay on your machine, create the ignored local file:
@@ -203,7 +203,7 @@ this repository in place.
 
 From this repository, run `./scripts/check` for regression tests and
 `./bin/git-safety all` for security scans. Tests use temporary repositories and
-synthetic data; they don't need Hammerspoon or Lua.
+synthetic data.
 
 - [Validation results](VALIDATION.md), including what hasn't been tested
 - [CI setup](docs/CI.md)
