@@ -67,3 +67,15 @@ comparisons, and full toolkit self-scans and current-PATH doctor checks passed.
 See `VALIDATION.md` for evidence, architecture decisions, commit checkpoints,
 known engine differences, and compatibility limits. Linux/hosted CI execution
 and the separate Hammerspoon migration have not been performed.
+
+## README and installation guidance follow-up
+
+Rewrite the README for junior and mid-level engineers, starting with the existing
+local-checkout installation and explaining PATH, the symlink, dependencies, and
+per-project setup. Preserve exact scan/policy details in a linked reference page.
+Add a comparison of standard installation patterns with user effort, maintenance,
+security, and cost tradeoffs, clearly separating proposals from implemented UX.
+This follow-up changes documentation only; it does not install tools, change
+shell settings, introduce packaging, or migrate Hammerspoon. Validate links,
+documented commands against the installer, and scanner results before committing
+the completed documentation change.
