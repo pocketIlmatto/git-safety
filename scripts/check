@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Toolkit regressions are independent of security scans and application checks.
+set -euo pipefail
+base="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$base"
+for dependency in git python3 rg gitleaks; do
+  if ! command -v "$dependency" >/dev/null 2>&1; then
+    echo "ERROR: missing test dependency: $dependency" >&2
+    exit 2
+  fi
+done
+for script in bin/git-safety scripts/install scripts/uninstall scripts/check; do
+  bash -n "$script"
+done
+export PYTHONDONTWRITEBYTECODE=1
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+git diff --check

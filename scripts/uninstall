@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if ! command -v python3 >/dev/null 2>&1; then
+  echo 'ERROR: uninstallation requires Python 3.9 or later.' >&2
+  exit 2
+fi
+base="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 -B "$base/install_cli.py" uninstall "$@"
