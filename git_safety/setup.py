@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 import shutil
 import stat
 import subprocess
 import sys
-from typing import Iterable
 
 from .common import SafetyError
 
@@ -42,7 +42,14 @@ def _git(root: Path, *args: str, check: bool = True) -> str:
         raise SafetyError("Git is unavailable; install Git and try again.") from exc
     if check and completed.returncode:
         raise SafetyError("Unable to inspect this Git repository.")
-    return completed.stdout.decode("utf-8", "surrogateescape").rstrip("\n")
+    return _decode_git_output(completed.stdout)
+
+
+def _decode_git_output(output: bytes) -> str:
+    """Remove Git's one record terminator without altering a valid value."""
+    if output.endswith(b"\n"):
+        output = output[:-1]
+    return output.decode("utf-8", "surrogateescape")
 
 
 def _regular_or_missing(path: Path, description: str) -> None:
@@ -116,6 +123,13 @@ def init(root: Path) -> int:
                 handle.write(addition)
         else:
             _write_new(ignore, addition)
+    for name in LOCAL_POLICIES:
+        relative = f"{POLICY_DIR}/{name}"
+        if not _ignored(root, relative):
+            raise SafetyError(
+                f"Refusing policy setup: {relative} is not effectively ignored; "
+                "remove a later ignore negation and run init again."
+            )
 
     if not policy_dir.exists():
         policy_dir.mkdir(mode=0o755)
@@ -140,8 +154,8 @@ def _is_within(child: Path, parent: Path) -> bool:
         return False
 
 
-def _hook_location(root: Path) -> tuple[Path, bool, str | None]:
-    """Return (directory, default_location, effective-config-description)."""
+def _hook_location(root: Path) -> tuple[Path, bool, str | None, bool]:
+    """Return (directory, default_location, config_origin, shared_worktree)."""
     configured = _git(root, "config", "--path", "--get", "core.hooksPath", check=False)
     origin = _git(root, "config", "--show-origin", "--show-scope", "--get", "core.hooksPath", check=False)
     if configured:
@@ -164,26 +178,31 @@ def _hook_location(root: Path) -> tuple[Path, bool, str | None]:
             )
         _safe_directory(hook_dir, "configured hooks directory")
         _no_symlink_below(hook_dir, root, "configured hooks directory")
-        return hook_dir, False, origin or None
+        return hook_dir, False, origin or None, False
 
     hook_dir = _path_from_git(root, _git(root, "rev-parse", "--git-path", "hooks"))
     git_dir = _path_from_git(root, _git(root, "rev-parse", "--git-dir"))
+    common_dir = _path_from_git(root, _git(root, "rev-parse", "--git-common-dir"))
     try:
-        # Git selected this path; still require it to remain below this worktree's
-        # git directory to avoid writing through a surprising symlink.
-        if not _is_within(hook_dir.resolve(strict=False), git_dir.resolve(strict=False)):
+        resolved_hook = hook_dir.resolve(strict=False)
+        resolved_git = git_dir.resolve(strict=False)
+        resolved_common = common_dir.resolve(strict=False)
+        in_worktree = _is_within(resolved_hook, resolved_git)
+        in_common = _is_within(resolved_hook, resolved_common)
+        # A linked worktree can legitimately use the common Git hooks directory.
+        if not in_worktree and not in_common:
             raise SafetyError("Refusing hook installation: Git returned an unsafe hooks path.")
     except OSError as exc:
         raise SafetyError("Unable to resolve Git hooks directory safely.") from exc
     _safe_directory(hook_dir, "Git hooks directory")
-    _no_symlink_below(hook_dir, git_dir, "Git hooks directory")
-    return hook_dir, True, None
+    _no_symlink_below(hook_dir, common_dir if in_common else git_dir, "Git hooks directory")
+    return hook_dir, True, None, in_common and not in_worktree
 
 
 def _hook_path(root: Path) -> Path:
-    hook_dir, _, _ = _hook_location(root)
+    hook_dir, _, _, _ = _hook_location(root)
     if not hook_dir.exists():
-        hook_dir.mkdir(mode=0o755)
+        hook_dir.mkdir(mode=0o755, parents=True)
     if hook_dir.is_symlink() or not hook_dir.is_dir():
         raise SafetyError("Refusing hook installation: hooks directory is unsafe.")
     return hook_dir / "pre-commit"
@@ -197,6 +216,8 @@ def install_hook(root: Path) -> int:
         if not hook.is_file():
             raise SafetyError("Refusing hook installation: existing pre-commit hook is not a file.")
         if hook.read_bytes() == OWNED_HOOK:
+            if not hook.stat().st_mode & 0o111:
+                hook.chmod(hook.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             return 0
         raise SafetyError("Refusing hook installation: an existing pre-commit hook is not owned by git-safety.")
     _write_new(hook, OWNED_HOOK, 0o755)
@@ -204,7 +225,7 @@ def install_hook(root: Path) -> int:
 
 
 def uninstall_hook(root: Path) -> int:
-    hook_dir, _, _ = _hook_location(Path(root))
+    hook_dir, _, _, _ = _hook_location(Path(root))
     hook = hook_dir / "pre-commit"
     if hook.is_symlink():
         raise SafetyError("Refusing hook removal: pre-commit hook is a symlink.")
@@ -224,11 +245,15 @@ def _tracked(root: Path, relative: str) -> bool:
 
 def _ignored(root: Path, relative: str) -> bool:
     completed = subprocess.run(
-        ["git", "check-ignore", "-q", "--", relative], cwd=root,
+        ["git", "check-ignore", "--no-index", "-q", "--", relative], cwd=root,
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         check=False,
     )
     return completed.returncode == 0
+
+
+def _safe_display(value: Path | str) -> str:
+    return json.dumps(os.fsdecode(os.fspath(value)), ensure_ascii=True)
 
 
 def doctor(root: Path) -> int:
@@ -241,16 +266,27 @@ def doctor(root: Path) -> int:
         if path.is_symlink() or not path.is_file() or not os.access(path, os.R_OK):
             errors.append(f"missing or unreadable required policy: {POLICY_DIR}/{name}")
     try:
-        hook_dir, is_default, origin = _hook_location(root)
+        hook_dir, is_default, origin, shared_worktree = _hook_location(root)
         hook = hook_dir / "pre-commit"
         if hook.exists() and hook.is_file() and not hook.is_symlink():
-            notices.append("pre-commit hook: git-safety" if hook.read_bytes() == OWNED_HOOK else "pre-commit hook: existing user hook")
+            if hook.read_bytes() == OWNED_HOOK:
+                if hook.stat().st_mode & 0o111:
+                    notices.append("pre-commit hook: git-safety")
+                else:
+                    errors.append("git-safety pre-commit hook is not executable")
+            else:
+                notices.append("pre-commit hook: existing user hook")
         elif hook.exists():
             errors.append("pre-commit hook path is unsafe")
         else:
             notices.append("pre-commit hook: not installed")
         if not is_default:
-            notices.append(f"core.hooksPath: {hook_dir}" + (f" ({origin})" if origin else ""))
+            notices.append(
+                f"core.hooksPath: {_safe_display(hook_dir)}"
+                + (f" ({_safe_display(origin)})" if origin else "")
+            )
+        if shared_worktree:
+            notices.append("pre-commit hook location is shared across linked worktrees")
     except SafetyError as exc:
         errors.append(str(exc))
     if shutil.which("git-safety") is None:
