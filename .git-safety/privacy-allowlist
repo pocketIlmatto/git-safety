@@ -1,0 +1,4 @@
+# Repository-specific privacy exceptions (one ripgrep regex per line).
+# Exact synthetic Git identity in early committed setup tests. Keep history
+# scanning enabled; do not exempt test files or unrelated addresses.
+^test@example\.invalid$
