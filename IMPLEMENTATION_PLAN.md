@@ -79,3 +79,8 @@ This follow-up changes documentation only; it does not install tools, change
 shell settings, introduce packaging, or migrate Hammerspoon. Validate links,
 documented commands against the installer, and scanner results before committing
 the completed documentation change.
+
+Completed: README rewritten; dependency setup, coverage reference, and seven-option
+installation comparison added. Relative links and all 14 shell examples passed
+checks; temporary install/reinstall/version/uninstall and full self-scans passed.
+No runtime or installer code changed, and no user installation was performed.

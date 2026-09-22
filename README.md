@@ -1,236 +1,211 @@
 # git-safety
 
-`git-safety` is a repository-local privacy and credential scanning toolkit. It
-combines a byte-safe privacy scanner with Gitleaks and provides opt-in Git hook
-integration. It is designed to run locally and in CI without changing Git
-history, fetching objects, or changing global Git configuration.
+Check a Git project for private information and secrets before you commit or
+share it. `git-safety` looks for things such as personal file paths and email
+addresses, and uses Gitleaks to find credentials such as API keys.
 
-This is an initially validated local release; no public release channel has
-been established. Treat the exact commit used by a consumer as the versioned
-artifact.
-Replace `<VERIFIED_COMMIT>` and `<INSTALL_ROOT>` in the examples below with
-values chosen by the consuming project; this repository does not publish a
-repository URL or release channel.
-
-## Requirements
-
-The supported baseline is:
-
-- Git 2.31 or newer
-- Bash 3.2 or newer for the launcher and installer
-- Python 3.9 or newer, using only the standard library
-- ripgrep 13 or newer
-- Gitleaks exactly 8.30.1, the validated baseline
-
-The CLI checks the Gitleaks version and required commands before scanning.
-Install dependencies through a trusted, separately reviewed source. Do not
-execute an unverified latest-release installer in CI.
+You install the command once, then choose which projects use it. Each project
+keeps its own rules. You can run checks yourself or have Git run them before
+each commit.
 
 ## Installation
 
-Consumer installation should use a verified checkout or archive at an exact
-commit, outside the repository being scanned. The installer creates one
-`git-safety` symlink in the selected bin directory and refuses an existing
-non-owned collision. For example:
+For now, install from a local copy of this repository. There isn't a Homebrew
+formula or Python package for `git-safety` yet.
+
+### 1. Check the dependencies
+
+Run these commands in Terminal:
 
 ```sh
-git clone <TOOL_SOURCE_URL> <INSTALL_ROOT>
-git -C <INSTALL_ROOT> checkout --detach <VERIFIED_COMMIT>
-<INSTALL_ROOT>/scripts/install --bin-dir "$HOME/.local/bin"
+git --version
+python3 --version
+rg --version
+gitleaks version
+```
+
+You need Git 2.31+, Python 3.9+, ripgrep 13+, and **Gitleaks 8.30.1 exactly**.
+The shell scripts also need Bash 3.2+. If all four commands report the required
+versions, continue to step 2.
+
+If anything is missing, follow [dependency setup](docs/DEPENDENCIES.md), then
+come back here. The exact Gitleaks version is a current installation limitation:
+the tool rejects other versions, even newer ones.
+
+### 2. Install the command
+
+For the current development checkout, run:
+
+```sh
+cd ~/Development/dev-tools/git-safety
+./scripts/install
+```
+
+If you keep the repository somewhere else, open Terminal in that directory and
+run `./scripts/install` there instead.
+
+This creates `~/.local/bin/git-safety`, a **symbolic link**—a shortcut—to the
+command in this repository. It doesn't copy the program or install dependencies.
+Keep this repository in place: moving or deleting it breaks the shortcut, and
+editing its code changes the installed command immediately. You don't need
+`sudo`.
+
+### 3. Make the command available in Terminal
+
+Run:
+
+```sh
 export PATH="$HOME/.local/bin:$PATH"
 git-safety --version
 ```
 
-The source URL above is intentionally a placeholder. Pin the tool checkout and
-the Gitleaks 8.30.1 binary in CI, and verify checksums using the release
-process adopted by the consuming project.
+You should see `git-safety 0.1.0`. `PATH` is the list of directories your shell
+searches for commands. The `export` line adds the installation directory for
+this terminal session.
 
-On macOS with Homebrew, use `brew install python ripgrep gitleaks` as a
-starting point, then verify `gitleaks version` reports exactly 8.30.1. If
-Homebrew supplies another version, obtain the pinned release through the
-consumer's verified dependency process. Linux needs Git, Bash, Python,
-ripgrep, and Gitleaks; it does not need Lua or Hammerspoon.
-
-Upgrade by installing a new verified checkout with `scripts/install` and then
-running `git-safety --version`. Repository policy and opt-in hooks are left in
-place. Keep the dedicated installation checkout clean when changing it to a
-new verified commit; rollback uses the same method. The installer refuses a
-symlink owned by a different checkout, so uninstall the old symlink before
-installing from a new checkout. For complete removal, first run
-`git-safety uninstall-hook` in each opted-in repository. Then remove the CLI
-symlink:
+To keep it available in new terminals, add this line **once** to `~/.zshrc`:
 
 ```sh
-<INSTALL_ROOT>/scripts/uninstall --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Uninstallation removes only the symlink owned by this tool and refuses a
-collision or replacement it does not own. Hook removal also removes only a
-byte-for-byte tool-owned hook. Repository policy is preserved by both commands.
+Installation is now complete. It hasn't enabled checks in any other project.
 
-## Repository setup
+## Set up a project
 
-Run setup from any directory inside the target Git repository:
+Open Terminal in the Git project you want to check, then run:
 
 ```sh
 git-safety init
-git-safety install-hook
 git-safety doctor
-```
-
-`init` creates missing files under `.git-safety/`:
-
-```text
-.git-safety/privacy-patterns
-.git-safety/privacy-allowlist
-.git-safety/privacy-patterns.local.example
-```
-
-It also adds precise ignores for `privacy-patterns.local` and
-`privacy-allowlist.local`. Existing policy, local files, and ignore entries are
-preserved. The two local files are for clone-specific rules and are never
-public policy. Keep them untracked and do not put credentials or broad
-allowlists in public policy.
-
-The pre-commit hook is repository opt-in. It delegates to `git-safety staged`,
-does not contain scanner logic, does not set global `core.hooksPath`, and
-refuses inherited or external hook paths and an existing pre-commit hook.
-Linked worktrees can share the effective default hooks directory; inspect it
-before installation. Compose an existing hook manually when needed, preserving
-all other hook actions. Hooks can be
-bypassed with `git commit --no-verify`; required CI branch checks are a separate
-repository setting.
-
-## Commands and exit status
-
-The default command is `all`:
-
-```text
-git-safety [--version] [--help]
-git-safety staged
-git-safety worktree
-git-safety history
 git-safety all
-git-safety init
-git-safety install-hook
-git-safety uninstall-hook
-git-safety doctor
 ```
 
-Exit status is consistent across scans: `0` means clean, `1` means findings,
-and `2` means setup, dependency, configuration, or incomplete-scan error. The
-comprehensive command runs independent components and aggregates them: an error
-takes precedence over findings, and findings take precedence over clean
-results. A component that did not run is reported as incomplete rather than
-being treated as a pass.
+`init` creates the project's rule files and adds ignore entries for local rules.
+It preserves existing files. `doctor` checks the setup and tells you about
+missing dependencies or configuration problems. `all` checks staged changes,
+current files, and Git history.
 
-`staged` reads added content from the index and runs privacy and Gitleaks
-staged checks. It does not substitute the working copy, so partial staging and
-an index that differs from the working tree remain meaningful. Gitleaks' native
-staged engine and the privacy scanner's forced-text diff parsing have different
-Git attribute and binary handling; identical results are not promised.
+Commit the public configuration when you're ready:
 
-`worktree` scans tracked and untracked, non-ignored publishable files. Tracked
-files remain eligible even if an ignore rule matches them. Symlinks are scanned
-as their target strings and are never followed. Gitleaks receives an external
-temporary snapshot, which is removed after the scan.
+```sh
+git add .gitignore .git-safety/privacy-patterns .git-safety/privacy-allowlist .git-safety/privacy-patterns.local.example
+git commit -m "Add Git safety rules"
+```
 
-`history` scans privacy blobs and Gitleaks history over all reachable local
-refs. The Gitleaks invocation uses:
+To run checks automatically before commits, also run:
+
+```sh
+git-safety install-hook
+```
+
+A **pre-commit hook** is a script Git runs before creating a commit. This one
+runs `git-safety staged`. If the project already has a hook, installation stops
+and leaves it alone; see [hook setup](docs/REFERENCE.md#hooks) before combining
+them. Repeat project setup in each clone where you want these checks enabled.
+
+## Everyday use
+
+| Command | Use it to… |
+| --- | --- |
+| `git-safety staged` | Check the changes you've selected with `git add`. |
+| `git-safety worktree` | Check current files, including new files Git doesn't ignore. |
+| `git-safety history` | Check committed content across locally available branches and tags. |
+| `git-safety all` | Run all three checks. This is also the default if you omit the command. |
+| `git-safety doctor` | Diagnose installation, rule-file, and hook problems. |
+
+With the hook installed, your usual `git add` and `git commit` workflow stays
+the same. Run `git-safety all` before sharing the project to include its history.
+
+A finding shows a file location without printing the matched value or source
+line. Review that location, remove the private content or add a narrow exception
+if it's intentional, and rerun the check. A finding in an old commit stays in
+history even after you delete it from today's files. The tool doesn't rewrite
+history or rotate credentials.
+
+For scripts and CI, exit code **0** means clean, **1** means findings, and **2**
+means a check couldn't finish. Other checks continue where possible; any
+incomplete check makes the overall result `2`.
+
+## Add project-specific rules
+
+Built-in rules cover macOS home-directory paths, email addresses, and URLs with
+embedded usernames and passwords. Add other information you want to catch to
+`.git-safety/privacy-patterns`, one regular expression per line.
+
+For example, a literal identifier containing a dot needs an escaped dot:
 
 ```text
---all --full-history --root --no-renames --no-ext-diff --no-textconv --text -m
+internal-project\.example
 ```
 
-It does not fetch missing objects. A shallow or partial/promisor repository is
-incomplete and returns `2`; fetch or reclone the required full history
-separately, then rerun the scan. The tool never auto-fetches.
-Privacy history deduplicates blob contents and reports a representative
-commit/path. History excludes unreachable objects, reflogs, commit metadata and
-messages, and recursively separate submodules.
+Rules are case-insensitive. Empty lines and lines beginning with `#` are ignored.
+The built-in rules stay active even if your project rule files are empty.
 
-`all` runs staged, worktree, and history coverage. `doctor` checks repository
-context, dependency visibility, policy readability and syntax, effective hook
-configuration, CLI visibility for the current process only (GUI clients must
-be checked separately), and whether local policy files are ignored and
-untracked. It never
-prints local policy contents. If a GUI client has a different PATH, repair that
-client's environment and rerun diagnosis; a terminal PATH change cannot verify
-the GUI process.
+For rules that should stay on your machine, create the ignored local file:
 
-## Privacy policy
+```sh
+cp -n .git-safety/privacy-patterns.local.example .git-safety/privacy-patterns.local
+```
 
-Privacy rules are additive in this order:
+Edit that file and run `git-safety doctor` to check it is ignored and untracked.
+Local rules aren't present in other clones or CI.
 
-1. Built-in generic rules for user paths, email addresses, and credential-bearing URLs.
-2. Public repository rules in `.git-safety/privacy-patterns`.
-3. Ignored local rules in `.git-safety/privacy-patterns.local`.
+Use `.git-safety/privacy-allowlist` for shared exceptions, or
+`.git-safety/privacy-allowlist.local` for exceptions on your machine. Keep them
+specific: an exception applies to an individual match, and can allow that value
+wherever it appears. Privacy exceptions do not disable Gitleaks detections.
+See the [rule reference](docs/REFERENCE.md#rules-and-exceptions) for examples
+and Gitleaks configuration.
 
-Allowlist entries are additive in the corresponding public and local files, and
-are evaluated against each matched value. A placeholder on a line does not
-exempt another private value on that line. Rules and exceptions use
-case-insensitive ripgrep-compatible regular expressions; blank and comment
-lines are ignored and both files are validated even when no content is found.
-Escape literal identifiers as regular expressions require. For example,
-`alice+test@example.com` becomes `alice\+test@example\.com`; an anchored safe
-placeholder exception can be `^[A-Za-z0-9._%+-]+@example\.(com|org|net)$`.
-Keep exceptions narrow and value-specific.
+## Troubleshooting
 
-Privacy policy files themselves have exact path exemptions for the current
-`.git-safety/` names and the legacy root-level names. This prevents examples in
-policy from self-matching; it is not an exemption for the policy directory or
-for secrets. Gitleaks retains its own detection behavior and does not inherit
-privacy allowlists or these path exemptions.
+| Problem | What to do |
+| --- | --- |
+| `git-safety: command not found` | Run the `export PATH=...` line from installation. Check the repository hasn't moved. |
+| Gitleaks version is unsupported | Install exactly 8.30.1 using the [dependency guide](docs/DEPENDENCIES.md). |
+| Required policy is missing | Run `git-safety init` inside the project, then `git-safety doctor`. |
+| History is shallow | Fetch full history separately, for example with `git fetch --unshallow`, then rerun. The scanner doesn't fetch for you. |
+| Terminal works, but a Git GUI fails | The GUI may use a different PATH. Configure it to find the CLI and its dependencies. |
+| Hook installation finds an existing hook | Keep it and follow the [hook guidance](docs/REFERENCE.md#hooks). |
 
-The exact exempt paths are `.git-safety/privacy-patterns`,
-`.git-safety/privacy-patterns.local`, `.git-safety/privacy-patterns.local.example`,
-`.git-safety/privacy-allowlist`, `.git-safety/privacy-allowlist.local`, and the
-legacy `.privacy-patterns`, `.privacy-patterns.local`,
-`.privacy-patterns.local.example`, `.privacy-allowlist`, and
-`.privacy-allowlist.local`. Empty public files are valid and retain built-ins;
-missing required files, malformed regexes, and unreadable policy return `2`.
+Checks can only find what their rules cover. Hooks can be bypassed with
+`git commit --no-verify`; required CI checks are configured separately.
+Filenames remain visible in reports. Submodules and commit messages aren't
+scanned. Gitleaks' staged scan can skip files Git treats as binary. Read the
+[coverage reference](docs/REFERENCE.md#scan-coverage) for the full boundaries.
 
-Gitleaks configuration follows native environment precedence (`GITLEAKS_CONFIG`
-or `GITLEAKS_CONFIG_TOML`), then a root `.gitleaks.toml` when present, then
-Gitleaks defaults. `.gitleaksignore` is honored. A local privacy exception can
-never suppress a Gitleaks finding.
+## Update or uninstall
 
-Findings redact matched values and source lines. Reported filenames and paths
-may themselves contain identifying text, so redaction is not anonymization.
+The installed command points to this checkout, so switching this checkout to
+another tested commit also switches the installed version. Check `git status`
+and save your work before switching versions. There is no automatic updater or
+published release channel yet. See [version management](docs/REFERENCE.md#updates-and-rollback)
+for the current manual process.
 
-## CI and routine workflow
+To stop automatic checks in a project, run this inside that project:
 
-For a routine local check, initialize once, install the hook, and run
-`git-safety all` before publishing. In CI, use a full-history checkout with
-credentials persisted off, run the pinned toolkit and Gitleaks versions from
-temporary storage outside the worktree, and retain separate project tests and
-security scans. Run full coverage on pull requests and pushes to the protected
-default branch with read-only repository permissions and bounded execution.
+```sh
+git-safety uninstall-hook
+```
 
-The scanner does not enforce branch protection. A successful scan means only
-that the configured rules found no unresolved matches in the scanned local
-objects and files.
+To remove the command entirely, remove its hooks from your projects first.
+Then, from this toolkit's directory, run:
 
-## Safety boundaries and limitations
+```sh
+./scripts/uninstall
+```
 
-The tool never rewrites history, rotates credentials, deletes user files,
-resets the index, silently untracks private files, or auto-fetches history.
-Deleting a current value does not remove it from reachable history; rotate or
-revoke exposed credentials through the responsible service and handle history
-rewriting as a separately authorized operation.
+This removes the shortcut in `~/.local/bin`. It leaves your project rules and
+this repository in place.
 
-Local ignored policy is absent in CI and other clones unless provisioned
-securely. Hooks are clone-local and bypassable. Policy is read from the current
-on-disk checkout, including local rules; a partially staged policy file does
-not create a historical or index-specific policy snapshot. Submodules are not
-scanned recursively, and content unavailable in a shallow or unfetched history
-cannot be audited.
+## Development and further reading
 
-## Development
+From this repository, run `./scripts/check` for regression tests and
+`./bin/git-safety all` for security scans. Tests use temporary repositories and
+synthetic data; they don't need Hammerspoon or Lua.
 
-Run the repository's regression tests with Python's standard test runner. Keep
-fixtures synthetic and outside scanned worktrees. Do not claim hosted CI or a
-consumer migration unless it was actually run and reviewed.
-
-From a development checkout, `scripts/check` runs the local test and validation
-checks.
+- [Validation results](VALIDATION.md), including what hasn't been tested
+- [CI setup](docs/CI.md)
+- [Migration from existing scanners](docs/MIGRATION.md)
+- [Installation options we're considering](docs/INSTALLATION_OPTIONS.md)
