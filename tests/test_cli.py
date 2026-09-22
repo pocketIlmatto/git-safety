@@ -117,6 +117,31 @@ class CommandTests(unittest.TestCase):
     def test_non_repository_is_error_two(self):
         self.command("all", cwd=self.base, expected=2)
 
+    def test_installed_hook_enforces_staged_scan_and_missing_cli_error(self):
+        self.git("config", "--unset", "core.hooksPath")
+        self.command("install-hook")
+        self.git("add", ".")
+        private = b"/" + b"Users/" + b"synthetic-person/private"
+        (self.root / "fixture.txt").write_bytes(private)
+        self.git("add", "fixture.txt")
+        env = dict(os.environ, PATH=str(SOURCE / "bin") + os.pathsep + os.environ["PATH"])
+        rejected = subprocess.run(["git", "commit", "-qm", "Must reject"], cwd=self.root,
+                                  env=env, capture_output=True)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertNotIn(private, rejected.stdout + rejected.stderr)
+        self.assertIn(b"staged privacy: findings", rejected.stdout + rejected.stderr)
+        (self.root / "fixture.txt").write_text("clean\n")
+        self.git("add", "fixture.txt")
+        accepted = subprocess.run(["git", "commit", "-qm", "Clean commit"], cwd=self.root,
+                                  env=env, capture_output=True)
+        self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+        # Run the installed hook with an empty PATH: even Git GUI environments
+        # without the CLI get an explicit failure rather than silently skipping.
+        result = subprocess.run([str(self.root / ".git/hooks/pre-commit")], cwd=self.root,
+                                env=dict(os.environ, PATH=""), capture_output=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(b"git-safety: command not found", result.stderr)
+
 
 class AggregationTests(unittest.TestCase):
     def test_error_overrides_findings_and_other_coverage_continues(self):
