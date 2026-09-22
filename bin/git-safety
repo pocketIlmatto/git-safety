@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Compatible with the macOS system Bash 3.2.
+set -euo pipefail
+if ! command -v python3 >/dev/null 2>&1; then
+    echo 'ERROR: git-safety requires Python 3.9 or later; install python3.' >&2
+    exit 2
+fi
+entry="${BASH_SOURCE[0]}"
+while [ -L "$entry" ]; do
+    base="$(cd -P "$(dirname "$entry")" && pwd)"
+    entry="$(readlink "$entry")"
+    case "$entry" in /*) ;; *) entry="$base/$entry" ;; esac
+done
+base="$(cd -P "$(dirname "$entry")" && pwd)"
+export PYTHONDONTWRITEBYTECODE=1
+exec python3 "$base/../git_safety/cli.py" "$@"
