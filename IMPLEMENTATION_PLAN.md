@@ -84,3 +84,15 @@ Completed: README rewritten; dependency setup, coverage reference, and seven-opt
 installation comparison added. Relative links and all 14 shell examples passed
 checks; temporary install/reinstall/version/uninstall and full self-scans passed.
 No runtime or installer code changed, and no user installation was performed.
+
+## Bounded Gitleaks compatibility
+
+Support stable Gitleaks versions 8.29.1 through 8.30.1 inclusive. Homebrew's
+maintained formula currently provides 8.30.1. Test the three published versions
+in that range with the existing secrets/CLI suites, using checksum-verified
+temporary binaries for the older releases. Add version-boundary/malformed-output
+tests and retain command-capability checks. Keep CI reproducible with a small
+pinned version matrix; use the maintained Homebrew formula for local dependency
+installation. Record tested behavior versus detection-rule differences and the
+procedure/cost for expanding the range. Do not publish a tap or change installed
+dependencies in this step. Commit the tested implementation and documentation.
