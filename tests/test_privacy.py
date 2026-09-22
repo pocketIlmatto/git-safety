@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+from unittest import mock
 
 from git_safety import privacy
 
@@ -163,6 +164,17 @@ class PrivacyCheckTests(unittest.TestCase):
         self.scan(expected=1)
         self.scan("worktree", 1)
 
+    def test_symlinked_parent_is_incomplete_without_reading_outside_root(self):
+        self.write(b"safe\n", "nested/fixture.txt")
+        self.git("commit", "-qm", "Track nested fixture")
+        external = self.root.parent / "privacy-external"
+        external.mkdir()
+        self.addCleanup(shutil.rmtree, external)
+        (external / "fixture.txt").write_bytes(PRIVATE)
+        shutil.rmtree(self.root / "nested")
+        (self.root / "nested").symlink_to(external, target_is_directory=True)
+        self.scan("worktree", 2)
+
     def test_ripgrep_regex_local_rules_and_allowlist(self):
         self.write(b"private[[:digit:]]+\n", ".git-safety/privacy-patterns.local", stage=False)
         self.write(b"private123\n")
@@ -198,6 +210,40 @@ class PrivacyCheckTests(unittest.TestCase):
         self.write(b"*.txt -diff\n", ".gitattributes")
         self.write(PRIVATE)
         self.scan(expected=1)
+
+    def test_unmerged_index_is_incomplete(self):
+        blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=self.root,
+                              input=b"safe\n", stdout=subprocess.PIPE, check=True).stdout.strip()
+        entries = b"100644 " + blob + b" 2\tconflict.txt\n" + b"100644 " + blob + b" 3\tconflict.txt\n"
+        subprocess.run(["git", "update-index", "--index-info"], cwd=self.root,
+                       input=entries, check=True)
+        self.scan("staged", 2)
+
+    def test_shallow_history_is_incomplete(self):
+        git_dir = Path(self.git("rev-parse", "--git-dir").strip().decode())
+        if not git_dir.is_absolute():
+            git_dir = self.root / git_dir
+        (git_dir / "shallow").write_bytes(self.git("rev-parse", "HEAD").strip() + b"\n")
+        self.scan("history", 2)
+
+    def test_scanner_setup_cleans_temporary_files_after_validation_failure(self):
+        temporary = tempfile.TemporaryDirectory(prefix="privacy-cleanup-")
+        self.addCleanup(temporary.cleanup)
+
+        class TrackingDirectory:
+            name = temporary.name
+            cleaned = False
+
+            def cleanup(self):
+                self.cleaned = True
+                temporary.cleanup()
+
+        tracking = TrackingDirectory()
+        with mock.patch("git_safety.privacy.temporary_directory", return_value=tracking), \
+             mock.patch("git_safety.privacy._rg", side_effect=privacy.ScanFailure("invalid rules")):
+            with self.assertRaises(privacy.ScanFailure):
+                privacy._Scanner(self.root, b"rule\n", b"")
+        self.assertTrue(tracking.cleaned)
 
     def test_tracked_ignored_file_remains_eligible(self):
         self.write(PRIVATE, "tracked.txt")

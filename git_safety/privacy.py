@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import tempfile
 
 from .common import SafetyError, git as common_git, run as common_run, temporary_directory
@@ -94,15 +95,19 @@ class _Scanner:
         self.findings = 0
         self.allowed: dict[bytes, bool] = {}
         self._temporary = temporary_directory(root, prefix="git-safety-privacy-")
-        base = Path(self._temporary.name)
-        self.rules_path = base / "rules"
-        self.allow_path = base / "allowlist"
-        self.rules_path.write_bytes(rules)
-        self.allow_path.write_bytes(allowlist)
-        _rg(self.rules_path, b"")
-        if allowlist:
-            _rg(self.allow_path, b"")
-        self.has_allowlist = bool(allowlist)
+        try:
+            base = Path(self._temporary.name)
+            self.rules_path = base / "rules"
+            self.allow_path = base / "allowlist"
+            self.rules_path.write_bytes(rules)
+            self.allow_path.write_bytes(allowlist)
+            _rg(self.rules_path, b"")
+            if allowlist:
+                _rg(self.allow_path, b"")
+            self.has_allowlist = bool(allowlist)
+        except BaseException:
+            self._temporary.cleanup()
+            raise
 
     def close(self) -> None:
         self._temporary.cleanup()
@@ -130,6 +135,8 @@ class _Scanner:
                       f"{submatch['start'] + 1}: private pattern matched (value redacted)")
 
     def staged(self) -> None:
+        if _git(self.root, "diff", "--cached", "--name-only", "-z", "--diff-filter=U"):
+            raise ScanFailure("index has unresolved merge entries; scan incomplete")
         paths = _git(self.root, "diff", "--cached", "--name-only", "-z", "--no-renames",
                      "--diff-filter=ACMRT").split(b"\0")
         for path in paths:
@@ -158,25 +165,57 @@ class _Scanner:
         for path in sorted(set(paths.split(b"\0"))):
             if not path or path in POLICY_PATHS:
                 continue
-            file_path = self.root / os.fsdecode(path)
-            try:
-                info = file_path.lstat()
-            except FileNotFoundError:
-                # A concurrent removal is not publishable from this working tree.
+            file_path, info = self._worktree_entry(path)
+            if info is None:
                 continue
-            except OSError as error:
-                raise ScanFailure("working-tree file could not be inspected; scan incomplete") from error
-            if os.path.islink(file_path):
-                self.scan_data(os.fsencode(os.readlink(file_path)), path)
-            elif __import__("stat").S_ISREG(info.st_mode):
+            if stat.S_ISLNK(info.st_mode):
                 try:
-                    self.scan_data(file_path.read_bytes(), path)
+                    self.scan_data(os.fsencode(os.readlink(file_path)), path)
                 except OSError as error:
-                    raise ScanFailure("working-tree file could not be read; scan incomplete") from error
-            elif not __import__("stat").S_ISDIR(info.st_mode):
+                    raise ScanFailure("working-tree symlink could not be read; scan incomplete") from error
+            elif stat.S_ISREG(info.st_mode):
+                self.scan_data(self._read_regular_file(file_path), path)
+            elif not stat.S_ISDIR(info.st_mode):
                 raise ScanFailure("unsupported working-tree file type; scan incomplete")
 
+    def _worktree_entry(self, path: bytes) -> tuple[Path, os.stat_result | None]:
+        """Inspect every component without traversing symlinked directories."""
+        relative = Path(os.fsdecode(path))
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ScanFailure("Git returned an unsafe working-tree path; scan incomplete")
+        current = self.root
+        for index, component in enumerate(relative.parts):
+            current = current / component
+            try:
+                info = current.lstat()
+            except FileNotFoundError:
+                # A concurrent removal is not publishable from this working tree.
+                return current, None
+            except OSError as error:
+                raise ScanFailure("working-tree file could not be inspected; scan incomplete") from error
+            if index < len(relative.parts) - 1:
+                if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                    raise ScanFailure("working-tree path has an unsafe parent; scan incomplete")
+        return current, info
+
+    @staticmethod
+    def _read_regular_file(path: Path) -> bytes:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(path, flags)
+            with os.fdopen(descriptor, "rb") as handle:
+                info = os.fstat(handle.fileno())
+                if not stat.S_ISREG(info.st_mode):
+                    raise ScanFailure("working-tree file changed type; scan incomplete")
+                return handle.read()
+        except ScanFailure:
+            raise
+        except OSError as error:
+            raise ScanFailure("working-tree file could not be read; scan incomplete") from error
+
     def history(self) -> None:
+        if _git(self.root, "rev-parse", "--is-shallow-repository").strip() == b"true":
+            raise ScanFailure("history is shallow; scan incomplete")
         seen: set[bytes] = set()
         for commit in _git(self.root, "rev-list", "--all").splitlines():
             tree = _git(self.root, "ls-tree", "-r", "-z", commit.decode("ascii"))

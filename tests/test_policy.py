@@ -33,6 +33,14 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(SafetyError):
             validate_policy(root)
 
+    def test_policy_directory_must_not_be_symlink(self):
+        root = self.make_root()
+        real_directory = root / "real-policy"
+        (root / ".git-safety").rename(real_directory)
+        (root / ".git-safety").symlink_to(real_directory, target_is_directory=True)
+        with self.assertRaises(SafetyError):
+            validate_policy(root)
+
     def test_empty_public_policy_is_valid_with_builtin_rules(self):
         validate_policy(self.make_root())
 

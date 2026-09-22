@@ -26,8 +26,16 @@ def _read_regular_file(path: Path, *, required: bool) -> bytes:
         raise SafetyError("privacy policy could not be inspected") from error
     if not stat.S_ISREG(info.st_mode):
         raise SafetyError(f"privacy policy file must be a regular file: {path.name}")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
-        return path.read_bytes()
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, "rb") as handle:
+            opened = os.fstat(handle.fileno())
+            if not stat.S_ISREG(opened.st_mode):
+                raise SafetyError(f"privacy policy file must be a regular file: {path.name}")
+            return handle.read()
+    except SafetyError:
+        raise
     except OSError as error:
         raise SafetyError(f"privacy policy file is not readable: {path.name}") from error
 
@@ -39,6 +47,15 @@ def policy_paths(root: Path) -> dict[str, Path]:
 
 def load_policy(root: Path) -> tuple[bytes, bytes]:
     """Return newline-normalized rule and exception data from on-disk policy."""
+    directory = root / POLICY_DIRECTORY
+    try:
+        directory_info = directory.lstat()
+    except FileNotFoundError as error:
+        raise SafetyError("required privacy policy directory is missing") from error
+    except OSError as error:
+        raise SafetyError("privacy policy directory could not be inspected") from error
+    if not stat.S_ISDIR(directory_info.st_mode):
+        raise SafetyError("privacy policy directory must be a real directory")
     paths = policy_paths(root)
     values = {
         name: _read_regular_file(paths[name], required=name in PUBLIC_POLICY_FILES)
