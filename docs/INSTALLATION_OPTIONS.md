@@ -4,7 +4,7 @@ Only **local checkout + symlink** is implemented today. The other options below
 are proposals, not installation commands you can use with this project yet.
 
 The main difficulty is dependency setup: this is a Python CLI that also runs
-Git, ripgrep, and exactly Gitleaks 8.30.1. Packaging the Python code alone doesn't
+Git, ripgrep, and a supported Gitleaks release (8.29.1–8.30.1). Packaging the Python code alone doesn't
 install those external programs. Any replacement installer needs to address
 that explicitly.
 
@@ -48,23 +48,14 @@ tool and its dependencies without making this project maintain a second package
 manager inside an installer script. Keep the existing checkout install for
 contributors. Linux CI can continue installing a pinned version separately.
 
-The first design decision is Gitleaks compatibility. A normal dependency on
-Homebrew's Gitleaks formula doesn't guarantee version 8.30.1. We have two choices:
-
-- Test and support an explicit range of Gitleaks versions, then depend on the
-  maintained formula. This needs compatibility tests; removing the exact-version
-  check alone would not establish support.
-- Keep 8.30.1 and maintain a separate versioned dependency in our tap. That makes
-  the initial behavior predictable but leaves us responsible for its eventual
-  security updates and platform support. Homebrew documents
-  [keeping historical versions in a tap](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap).
-
-I favor testing a supported range before shipping the tap. That reduces the
-long-term burden of carrying an old scanner version. Until then, the README
-documents the existing installation honestly, including the manual pinned
-dependency step.
+The Gitleaks compatibility decision is now implemented: stable 8.29.1–8.30.1
+is supported and local installation uses the maintained Homebrew formula.
+See [tests and update policy](GITLEAKS_COMPATIBILITY.md). A future toolkit formula
+should declare `depends_on "gitleaks"`, with the CLI retaining its compatibility
+check. This avoids maintaining our own old Gitleaks formula, but it doesn't
+guarantee that every future Homebrew upgrade is compatible.
 
 A follow-up implementation would need a release location and naming scheme,
-the Gitleaks compatibility decision, a formula, and fresh-machine install,
+a formula, and fresh-machine install,
 upgrade, uninstall, and hook tests. No tap, package, bootstrap downloader, or
 release publication was added as part of this documentation revision.

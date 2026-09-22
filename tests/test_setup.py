@@ -172,7 +172,8 @@ class SetupTests(unittest.TestCase):
             self.assertFalse((self.root / ".git-safety").exists())
             setup.install_hook(checkout)
             stdout, stderr = StringIO(), StringIO()
-            with redirect_stdout(stdout), redirect_stderr(stderr):
+            with redirect_stdout(stdout), redirect_stderr(stderr), \
+                    mock.patch.object(setup.shutil, "which", return_value=None):
                 self.assertEqual(setup.doctor(checkout), 2)  # CLI intentionally absent in test env.
             self.assertIn("shared across linked worktrees", stdout.getvalue())
 

@@ -96,3 +96,8 @@ pinned version matrix; use the maintained Homebrew formula for local dependency
 installation. Record tested behavior versus detection-rule differences and the
 procedure/cost for expanding the range. Do not publish a tap or change installed
 dependencies in this step. Commit the tested implementation and documentation.
+
+Completed: all three versions passed 34 focused tests each; full suite passed
+86 tests with one expected skip. Homebrew dependency guidance, bounded runtime
+checks, two-endpoint pinned CI, and compatibility evidence are updated. The
+toolkit tap remains a separate next step; no installed dependencies were changed.

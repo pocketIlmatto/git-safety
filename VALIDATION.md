@@ -134,3 +134,19 @@ Key commits in this repository (additional corrective checkpoints are in Git):
 
 The final documentation checkpoint records these results. There are no task
 commits in Hammerspoon.
+
+## Gitleaks range follow-up — September 22, 2026
+
+Stable 8.29.1–8.30.1 is now supported. Each of the three published versions
+passed 34 focused adapter/CLI tests on macOS (102 case executions). Older
+official release archives were checksum-verified in temporary storage; the
+installed binary was left unchanged. The final full suite ran 87 tests:
+86 passed and the expected macOS filename case was skipped. A pre-existing
+linked-worktree test now explicitly mocks missing CLI visibility instead of
+depending on the user's PATH. Full toolkit self-scans passed.
+
+Homebrew currently supplies the validated upper endpoint, so local instructions
+use its maintained formula. CI has a checksum-pinned two-endpoint matrix; YAML
+structure and shell syntax checks passed, but the new hosted/Linux matrix has
+not run. See [compatibility evidence and maintenance policy](docs/GITLEAKS_COMPATIBILITY.md)
+for boundary behavior, detection differences, upgrade risks, and future test cost.

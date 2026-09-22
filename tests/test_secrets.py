@@ -188,6 +188,30 @@ class RealGitleaksTests(unittest.TestCase):
 
 
 class MockedGitleaksFailures(unittest.TestCase):
+    def test_version_range_and_stable_output_validation(self):
+        supported = (b"8.29.1", b"8.30.0", b"8.30.1", b"v8.30.1\n")
+        unsupported = (b"8.29.0", b"8.30.2", b"8.31.0", b"9.0.0", b"8.3.1",
+                       b"8.30.1-rc1", b"8.30.1+vendor", b"HEAD", b"", b"8.30",
+                       b"08.30.1", b"8.30.1\nprivate-content")
+        help_output = b"--staged --log-opts --redact --exit-code"
+        for version in supported + unsupported:
+            with self.subTest(version=version), patch.object(secrets.shutil, "which", return_value="gitleaks"), \
+                    patch.object(secrets, "run", side_effect=lambda args: subprocess.CompletedProcess(
+                        args, 0, version if args[1] == "version" else help_output, b"")):
+                if version in supported:
+                    secrets.check_dependency()
+                else:
+                    with self.assertRaises(SafetyError) as error:
+                        secrets.check_dependency()
+                    self.assertNotIn("private-content", str(error.exception))
+
+    def test_supported_version_still_requires_command_capabilities(self):
+        with patch.object(secrets.shutil, "which", return_value="gitleaks"), \
+                patch.object(secrets, "run", side_effect=lambda args: subprocess.CompletedProcess(
+                    args, 0, b"8.30.1" if args[1] == "version" else b"unsupported command", b"")):
+            with self.assertRaises(SafetyError):
+                secrets.check_dependency()
+
     def test_subprocess_error_is_not_a_finding_and_does_not_leak(self):
         result = subprocess.CompletedProcess([], 1, TOKEN, TOKEN)
         with patch.object(secrets, "run", return_value=result):

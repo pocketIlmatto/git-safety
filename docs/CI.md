@@ -4,6 +4,11 @@ The toolkit's own `.github/workflows/checks.yml` tests the exact commit checked
 out for the run. Consumer jobs must additionally pin their installed toolkit to
 a reviewed full commit SHA. No published source URL or release is assumed here.
 
+Local installations use Homebrew's maintained Gitleaks formula within the
+supported 8.29.1–8.30.1 range. CI intentionally keeps an exact release/checksum:
+the toolkit tests both endpoints, and this consumer example pins 8.30.1.
+See [compatibility policy](GITLEAKS_COMPATIBILITY.md) when updating those pins.
+
 Use the following workflow as a starting point. Replace both `YOUR_...` values
 with your verified toolkit repository URL and its full 40-character commit SHA.
 Keep those pins in reviewed workflow code. The Git object ID verifies the fetched

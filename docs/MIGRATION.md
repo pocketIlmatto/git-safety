@@ -10,7 +10,7 @@ or other consumer migration is performed by this repository.
 Choose and record:
 
 - the exact verified `git-safety` commit;
-- the exact Gitleaks 8.30.1 binary and checksum;
+- a supported Gitleaks release (8.29.1–8.30.1), with an exact version and checksum for CI;
 - the consumer's public privacy rules and narrow match-level exceptions;
 - the secure source for clone-local rules;
 - the CI checkout and permissions policy; and

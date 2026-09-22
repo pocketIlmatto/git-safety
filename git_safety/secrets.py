@@ -9,21 +9,27 @@ import stat
 
 from .common import SafetyError, git, run, temporary_directory
 
-SUPPORTED_VERSION = "8.30.1"
+MIN_VERSION = (8, 29, 1)
+MAX_VERSION = (8, 30, 1)
+SUPPORTED_RANGE = "8.29.1 through 8.30.1 inclusive"
 FINDINGS_EXIT = 42
 HISTORY_OPTIONS = "--all --full-history --root --no-renames --no-ext-diff --no-textconv --text -m"
 
 
 def check_dependency():
     if not shutil.which("gitleaks"):
-        raise SafetyError("Gitleaks is missing; install Gitleaks 8.30.1 (see README)")
+        raise SafetyError("Gitleaks is missing; brew install gitleaks (see README)")
     version = run(["gitleaks", "version"]).stdout.strip()
-    if version != SUPPORTED_VERSION.encode():
-        raise SafetyError("unsupported Gitleaks version; use validated Gitleaks 8.30.1")
+    # Accept stable numeric releases only. Do not guess compatibility for HEAD,
+    # prereleases, vendor suffixes, or a future patch outside the tested window.
+    match = re.fullmatch(rb"v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version)
+    if not match or not MIN_VERSION <= tuple(map(int, match.groups())) <= MAX_VERSION:
+        raise SafetyError("unsupported Gitleaks version; supported: " + SUPPORTED_RANGE +
+                          "; see docs/DEPENDENCIES.md for upgrade or fallback guidance")
     for command, flag in (("git", b"--staged"), ("git", b"--log-opts"),
                           ("dir", b"--redact"), ("stdin", b"--exit-code")):
         if flag not in run(["gitleaks", command, "--help"]).stdout:
-            raise SafetyError("Gitleaks lacks required commands; install Gitleaks 8.30.1")
+            raise SafetyError("Gitleaks lacks required commands; reinstall a supported stable release")
 
 
 def config_args(root):

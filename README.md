@@ -24,13 +24,14 @@ rg --version
 gitleaks version
 ```
 
-You need Git 2.31+, Python 3.9+, ripgrep 13+, and **Gitleaks 8.30.1 exactly**.
+You need Git 2.31+, Python 3.9+, ripgrep 13+, and **Gitleaks 8.29.1–8.30.1**
+(inclusive, stable releases).
 The shell scripts also need Bash 3.2+. If all four commands report the required
 versions, continue to step 2.
 
 If anything is missing, follow [dependency setup](docs/DEPENDENCIES.md), then
-come back here. The exact Gitleaks version is a current installation limitation:
-the tool rejects other versions, even newer ones.
+come back here. On macOS, use Homebrew's maintained `gitleaks` formula. Versions
+outside the supported range are rejected until compatibility has been checked.
 
 ### 2. Install the command
 
@@ -163,7 +164,7 @@ and Gitleaks configuration.
 | Problem | What to do |
 | --- | --- |
 | `git-safety: command not found` | Run the `export PATH=...` line from installation. Check the repository hasn't moved. |
-| Gitleaks version is unsupported | Install exactly 8.30.1 using the [dependency guide](docs/DEPENDENCIES.md). |
+| Gitleaks version is unsupported | Check the supported range and [dependency guide](docs/DEPENDENCIES.md); a Homebrew upgrade may be newer than this toolkit supports. |
 | Required policy is missing | Run `git-safety init` inside the project, then `git-safety doctor`. |
 | History is shallow | Fetch full history separately, for example with `git fetch --unshallow`, then rerun. The scanner doesn't fetch for you. |
 | Terminal works, but a Git GUI fails | The GUI may use a different PATH. Configure it to find the CLI and its dependencies. |

@@ -12,22 +12,28 @@ gitleaks version
 ```
 
 Required versions: Git 2.31+, Python 3.9+, ripgrep 13+, Bash 3.2+, and Gitleaks
-**8.30.1 exactly**. The other minimum versions describe the supported interface;
+**8.29.1 through 8.30.1 inclusive**, stable releases. The other minimum versions describe the supported interface;
 see [validation](../VALIDATION.md) for the versions actually tested.
 
 ## macOS with Homebrew
 
-If Git, Python, or ripgrep is missing or too old, install it through Homebrew:
+Install the dependencies through Homebrew:
 
 ```sh
-brew install git python ripgrep
+brew install git python ripgrep gitleaks
 ```
 
-If `gitleaks version` already prints `8.30.1`, keep that installation. Homebrew
-may supply a different Gitleaks version, which this toolkit currently rejects.
-This is a packaging gap we still need to fix.
+Use the maintained `homebrew/core` Gitleaks formula; a separate versioned formula
+isn't needed. As checked on September 22, 2026, it supplies 8.30.1. Run
+`command -v gitleaks` and `gitleaks version` to confirm which copy your PATH selects.
+An older manually installed copy in `~/.local/bin` may take precedence over Brew.
 
-If you need 8.30.1, the following block downloads the release for an Apple Silicon
+Homebrew can eventually move beyond our supported range. Update this toolkit
+when compatibility support is available; otherwise use the explicit fallback
+below. Don't bypass the version check or assume a newer binary is equivalent.
+See [compatibility policy and test evidence](GITLEAKS_COMPATIBILITY.md).
+
+For a reproducible fallback, the following block downloads 8.30.1 for an Apple Silicon
 or Intel Mac, checks its SHA-256 digest, and installs it in `~/.local/bin`.
 It refuses to replace an existing file there. It doesn't remove or change a
 Homebrew installation. These digests come from the official
