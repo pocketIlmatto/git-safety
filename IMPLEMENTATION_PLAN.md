@@ -101,3 +101,10 @@ Completed: all three versions passed 34 focused tests each; full suite passed
 86 tests with one expected skip. Homebrew dependency guidance, bounded runtime
 checks, two-endpoint pinned CI, and compatibility evidence are updated. The
 toolkit tap remains a separate next step; no installed dependencies were changed.
+
+## Homebrew tap plan
+
+The next implementation is specified in [docs/HOMEBREW_PLAN.md](docs/HOMEBREW_PLAN.md):
+versioned source archives, a separate proposed tap, explicit Brew dependency
+selection, installed-package lifecycle tests, and publication after artifact
+review. This planning checkpoint does not implement or publish the tap.

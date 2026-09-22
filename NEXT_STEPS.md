@@ -9,3 +9,7 @@ experience.
 2026-09-22 status: Compatibility range 8.29.1–8.30.1 implemented and tested.
 Local dependency instructions now use the maintained Homebrew Gitleaks formula.
 See docs/GITLEAKS_COMPATIBILITY.md. The toolkit tap/release archives remain next.
+
+2026-09-22 plan: See docs/HOMEBREW_PLAN.md for implementation checkpoints,
+packaging/lifecycle tests, release decisions, and publication boundaries. One
+bounded sub-agent review informed the plan; implementation has not started.
