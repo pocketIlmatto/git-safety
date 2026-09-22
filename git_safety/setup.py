@@ -32,17 +32,33 @@ exec git-safety staged
 """.encode()
 
 
-def _git(root: Path, *args: str, check: bool = True) -> str:
+def _git_process(root: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
     try:
-        completed = subprocess.run(
+        return subprocess.run(
             ["git", *args], cwd=root, stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
         )
     except OSError as exc:
         raise SafetyError("Git is unavailable; install Git and try again.") from exc
-    if check and completed.returncode:
+
+
+def _git(root: Path, *args: str, check: bool = True) -> str:
+    completed = _git_process(root, *args)
+    if check and completed.returncode != 0:
+        raise SafetyError("Unable to inspect this Git repository.")
+    if not check and completed.returncode not in (0, 1):
         raise SafetyError("Unable to inspect this Git repository.")
     return _decode_git_output(completed.stdout)
+
+
+def _optional_git(root: Path, *args: str) -> tuple[bool, str]:
+    """Return whether an optional Git value exists, failing on other errors."""
+    completed = _git_process(root, *args)
+    if completed.returncode == 1:
+        return False, ""
+    if completed.returncode != 0:
+        raise SafetyError("Unable to inspect this Git repository.")
+    return True, _decode_git_output(completed.stdout)
 
 
 def _decode_git_output(output: bytes) -> str:
@@ -156,9 +172,13 @@ def _is_within(child: Path, parent: Path) -> bool:
 
 def _hook_location(root: Path) -> tuple[Path, bool, str | None, bool]:
     """Return (directory, default_location, config_origin, shared_worktree)."""
-    configured = _git(root, "config", "--path", "--get", "core.hooksPath", check=False)
-    origin = _git(root, "config", "--show-origin", "--show-scope", "--get", "core.hooksPath", check=False)
-    if configured:
+    configured_set, configured = _optional_git(root, "config", "--path", "--get", "core.hooksPath")
+    origin_set, origin = _optional_git(root, "config", "--show-origin", "--show-scope", "--get", "core.hooksPath")
+    if configured_set:
+        if not configured:
+            raise SafetyError("Refusing hook installation: core.hooksPath is empty.")
+        if not origin_set:
+            raise SafetyError("Unable to inspect configured hooks directory safely.")
         scope = origin.split("\t", 1)[0] if origin else ""
         if scope not in {"local", "worktree"}:
             raise SafetyError(
@@ -178,7 +198,7 @@ def _hook_location(root: Path) -> tuple[Path, bool, str | None, bool]:
             )
         _safe_directory(hook_dir, "configured hooks directory")
         _no_symlink_below(hook_dir, root, "configured hooks directory")
-        return hook_dir, False, origin or None, False
+        return hook_dir, False, origin, False
 
     hook_dir = _path_from_git(root, _git(root, "rev-parse", "--git-path", "hooks"))
     git_dir = _path_from_git(root, _git(root, "rev-parse", "--git-dir"))
@@ -268,7 +288,9 @@ def doctor(root: Path) -> int:
     try:
         hook_dir, is_default, origin, shared_worktree = _hook_location(root)
         hook = hook_dir / "pre-commit"
-        if hook.exists() and hook.is_file() and not hook.is_symlink():
+        if hook.is_symlink():
+            errors.append("pre-commit hook path is unsafe")
+        elif hook.exists() and hook.is_file():
             if hook.read_bytes() == OWNED_HOOK:
                 if hook.stat().st_mode & 0o111:
                     notices.append("pre-commit hook: git-safety")

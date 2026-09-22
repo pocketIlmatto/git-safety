@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+from unittest import mock
 
 from git_safety import setup
 from git_safety.common import SafetyError
@@ -17,11 +18,19 @@ class SetupTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
-        subprocess.run(["git", "-C", str(self.root), "config", "user.email", "test@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "config", "user.email", "test@example.com"], check=True)
         subprocess.run(["git", "-C", str(self.root), "config", "user.name", "Test"], check=True)
 
     def tearDown(self) -> None:
         self.temp.cleanup()
+
+    def commit(self, message: str) -> None:
+        # Do not let a developer's global hook setup run against disposable
+        # fixtures. Individual hook tests set local config after this point.
+        subprocess.run(
+            ["git", "-C", str(self.root), "-c", "core.hooksPath=/dev/null", "commit", "-qm", message],
+            check=True,
+        )
 
     def test_init_is_idempotent_and_preserves_existing_policy(self) -> None:
         (self.root / ".git-safety").mkdir()
@@ -66,6 +75,17 @@ class SetupTests(unittest.TestCase):
             subprocess.run(["git", "-C", str(self.root), "config", "core.hooksPath", str(external)], check=True)
             with self.assertRaises(SafetyError):
                 setup.install_hook(self.root)
+
+    def test_empty_configured_hooks_path_is_refused(self) -> None:
+        subprocess.run(["git", "-C", str(self.root), "config", "core.hooksPath", ""], check=True)
+        with self.assertRaises(SafetyError):
+            setup.install_hook(self.root)
+
+    def test_optional_git_refuses_unexpected_failure(self) -> None:
+        completed = subprocess.CompletedProcess(["git"], 3, b"", b"")
+        with mock.patch.object(setup, "_git_process", return_value=completed):
+            with self.assertRaises(SafetyError):
+                setup._git(self.root, "config", "--get", "core.hooksPath", check=False)
 
     def test_repository_owned_configured_hooks_are_supported(self) -> None:
         hooks = self.root / ".githooks"
@@ -123,13 +143,24 @@ class SetupTests(unittest.TestCase):
         setup.install_hook(self.root)
         self.assertTrue(hook.stat().st_mode & 0o111)
 
+    def test_doctor_flags_dangling_hook_symlink(self) -> None:
+        hook_dir = Path(subprocess.check_output(
+            ["git", "-C", str(self.root), "rev-parse", "--git-path", "hooks"], text=True
+        ).strip())
+        hook = (hook_dir if hook_dir.is_absolute() else self.root / hook_dir) / "pre-commit"
+        hook.symlink_to("missing-hook")
+        stdout, stderr = StringIO(), StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            self.assertEqual(setup.doctor(self.root), 2)
+        self.assertIn("hook path is unsafe", stderr.getvalue())
+
     def test_git_output_removes_one_terminator_only(self) -> None:
         self.assertEqual(setup._decode_git_output(b"one\n\n"), "one\n")
 
     def test_linked_worktree_initializes_its_own_policy_directory(self) -> None:
         (self.root / "README").write_text("base\n")
         subprocess.run(["git", "-C", str(self.root), "add", "README"], check=True)
-        subprocess.run(["git", "-C", str(self.root), "commit", "-qm", "base"], check=True)
+        self.commit("base")
         with tempfile.TemporaryDirectory() as checkout_name:
             checkout = Path(checkout_name) / "linked"
             subprocess.run(
