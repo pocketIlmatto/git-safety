@@ -238,6 +238,8 @@ def scan(root: Path, mode: str) -> int:
         return 2
     try:
         rules, allowlist = load_policy(root)
+        if shutil.which("rg") is None:
+            raise ScanFailure("privacy scanning requires ripgrep (rg)")
         rules = _combine(BUILTIN_RULES, rules)
         allowlist = _combine(BUILTIN_ALLOWLIST, allowlist)
         scanner = _Scanner(root, rules, allowlist)
@@ -254,6 +256,9 @@ def scan(root: Path, mode: str) -> int:
                 return 1
         finally:
             scanner.close()
+    except ScanFailure as error:
+        print(f"ERROR: {error}", file=os.sys.stderr)
+        return 2
     except (SafetyError, OSError, ValueError, UnicodeError):
         print("ERROR: privacy scan incomplete", file=os.sys.stderr)
         return 2

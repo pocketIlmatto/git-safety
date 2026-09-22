@@ -111,6 +111,20 @@ class PrivacyCheckTests(unittest.TestCase):
         self.scan(expected=1)
         self.scan("all", 1)
 
+    def test_policy_is_read_from_current_worktree_in_both_partial_staging_directions(self):
+        value = b"current-policy-123\n"
+        rule = b"current-policy-[[:digit:]]+\n"
+        public_rules = ".git-safety/privacy-patterns"
+        self.write(rule, public_rules)
+        self.write(b"# current policy deliberately has no custom rule\n", public_rules, stage=False)
+        self.write(value)
+        self.scan("staged")
+
+        self.write(b"# index policy deliberately has no custom rule\n", public_rules)
+        self.write(rule, public_rules, stage=False)
+        self.write(value)
+        self.scan("staged", 1)
+
     def test_deleting_private_line_is_permitted(self):
         self.write(PRIVATE + b"\nsafe\n")
         self.git("commit", "-qm", "Historical fixture")
@@ -135,6 +149,14 @@ class PrivacyCheckTests(unittest.TestCase):
         self.git("checkout", "-q", "--detach", initial)
         self.scan("worktree")
         self.scan("history", 1)
+
+    def test_history_deduplicates_identical_blobs(self):
+        self.write(PRIVATE, "first.txt")
+        self.git("commit", "-qm", "First copy")
+        self.write(PRIVATE, "second.txt")
+        self.git("commit", "-qm", "Second copy")
+        output = self.scan("history", 1)
+        self.assertEqual(output.count(b"private pattern matched"), 1)
 
     def test_ignored_files_and_untracked_files(self):
         self.write(b"ignored.txt\n", ".gitignore")
@@ -189,6 +211,33 @@ class PrivacyCheckTests(unittest.TestCase):
     def test_invalid_allowlist_fails_even_without_matches(self):
         self.write(b"[\n", ".git-safety/privacy-allowlist.local", stage=False)
         self.scan(expected=2)
+
+    def test_unreadable_required_policy_fails_closed(self):
+        with mock.patch("git_safety.policy.os.open", side_effect=PermissionError):
+            self.scan(expected=2)
+
+    def test_unreadable_optional_policy_fails_closed(self):
+        local = self.root / ".git-safety/privacy-patterns.local"
+        local.write_text("custom-rule\n")
+        original_open = os.open
+
+        def deny_local(path, flags, *args):
+            if Path(path) == local:
+                raise PermissionError
+            return original_open(path, flags, *args)
+
+        with mock.patch("git_safety.policy.os.open", side_effect=deny_local):
+            self.scan(expected=2)
+
+    def test_subprocess_failure_payload_is_redacted(self):
+        with mock.patch("git_safety.privacy.common_run",
+                        side_effect=privacy.SafetyError(PRIVATE.decode())):
+            self.scan(expected=2)
+
+    def test_missing_ripgrep_is_actionable_error_two(self):
+        with mock.patch("git_safety.privacy.shutil.which", return_value=None):
+            output = self.scan(expected=2)
+        self.assertIn(b"requires ripgrep", output)
 
     def test_rg_environment_config_cannot_disable_scanning(self):
         config = self.root / "rg-config"
