@@ -59,3 +59,53 @@ A follow-up implementation would need a release location and naming scheme,
 a formula, and fresh-machine install,
 upgrade, uninstall, and hook tests. No tap, package, bootstrap downloader, or
 release publication was added as part of this documentation revision.
+
+## Addendum: agent skill or plugin distribution
+
+Status: proposal only. Nothing described here is implemented, and the plugin
+details below are from memory and have not been checked against current
+harness documentation. Verify them before building.
+
+A skill or agent-harness plugin can complement the Homebrew tap, but it can't
+replace it:
+
+- **Dependencies.** A skill or plugin can ship the Python code, but it can't
+  install Git, ripgrep, Python, or a supported Gitleaks release.
+- **Hooks and CI.** The main job of `git-safety` is the Git pre-commit hook and
+  CI, which run without an agent. A plugin's files live in a harness-managed
+  cache directory that moves when the plugin updates, so a Git hook pointing
+  there would break.
+- **Reach.** Only users of that harness would get it.
+
+What it can add is enforcement where an agent commits or pushes.
+
+| Option | What it is | Effort | Notes |
+| --- | --- | --- | --- |
+| **Thin skill** | A `SKILL.md` telling the agent when and how to run `git-safety`. If the CLI is missing, it points the user to the install steps. | Very low | Based on the open Agent Skills format, so likely portable across harnesses. |
+| **Claude Code plugin** | The skill plus a `PreToolUse` hook on Bash `git commit` / `git push` that runs `git-safety staged` and blocks on exit 1 or 2. Optional slash commands. | Low–medium | Distributed through a `marketplace.json` in this repository, with no release archive or tap. Hooks are unlikely to be portable to other harnesses. |
+| **Self-contained plugin** (bundles the Python code) | The plugin carries its own CLI copy. | Medium | Not recommended: dependencies still need separate installation, and the copy can drift from the Homebrew one. |
+| **MCP server** | Exposes the scans as tools. | Medium–high | Overkill; the CLI's exit codes already suit agents. |
+
+Benefits of the skill and plugin layer:
+
+- **Guardrails for agents.** Never print matched values; treat exit 2 as an
+  incomplete check, not a clean one; ask before widening the allowlist; don't
+  rewrite history or rotate credentials, consistent with the README.
+- **Bypass coverage.** A plugin hook still runs when an agent commits with
+  `--no-verify`, which skips the Git hook.
+- **Cheap distribution.** A plugin marketplace can be this same Git repository.
+
+### Recommendation
+
+Keep the Homebrew tap as the way to install the engine. Add a thin skill and
+Claude Code plugin as a client of the installed `git-safety`:
+
+1. Preflight with `command -v git-safety && git-safety doctor`; on failure, show
+   the install command.
+2. A commit/push guard hook that calls `git-safety staged`.
+3. Skill text covering how to handle findings.
+
+This could ship before the tap, using a source-checkout install, and would
+exercise the CLI contract the Homebrew checkpoints depend on. Before building,
+check the current docs for plugin `bin/` and hook behavior, and for whether
+other harnesses (such as Codex or Cursor) support equivalent hooks.
