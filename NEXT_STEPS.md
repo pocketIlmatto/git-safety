@@ -20,3 +20,7 @@ builder, formula template/renderer/wrapper, docs, Mac CI workflow). `brew style`
 scripts/homebrew-lifecycle.py (needs a disposable Homebrew with network access; first run
 via the Mac workflow), choosing a license, and publication (tag, release, tap repo), which
 need owner authorization. See docs/HOMEBREW.md and docs/RELEASING.md.
+
+2026-10-06 update: PR #1 squash-merged; the Mac lifecycle workflow passed. MIT license
+chosen and added (LICENSE; formula uses `--license MIT`). Remaining: publication (tag,
+release, tap repo), which needs owner authorization.

@@ -29,7 +29,7 @@ After building, render the formula and stage the tap contents for review
 python3 scripts/render-formula.py --version 0.1.0 \
   --url https://github.com/pocketIlmatto/git-safety/releases/download/v0.1.0/git-safety-0.1.0.tar.gz \
   --sha256 "$(cut -d' ' -f1 ~/git-safety-release/git-safety-0.1.0.tar.gz.sha256)" \
-  --license <SPDX id chosen by the owner> \
+  --license MIT \
   --output-dir ~/git-safety-tap
 ```
 
