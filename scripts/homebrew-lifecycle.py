@@ -39,6 +39,13 @@ def run(*command, cwd=None, env=None, expected=0):
     return result.stdout
 
 
+def brew_step(*command):
+    """Run a brew command and echo its output so CI logs show what brew did."""
+    output = run(*command)
+    print(f"$ {' '.join(command)}\n{output}", flush=True)
+    return output
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -88,6 +95,12 @@ def main():
             run("git", "config", key, value, cwd=repo, env=isolated)
 
         def installed(version):
+            if not cli.exists():
+                for diagnostic in (("brew", "list", "--versions", "git-safety"), ("brew", "--cellar", "git-safety"),
+                                   ("ls", "-la", str(prefix / "Cellar" / "git-safety")), ("brew", "info", FORMULA)):
+                    print(f"$ {' '.join(diagnostic)}\n" + subprocess.run(
+                        diagnostic, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True).stdout, flush=True)
+                sys.exit(f"FAIL: {cli} is missing after installing git-safety {version}")
             assert f"git-safety {version}" in run(str(cli), "--version"), version
             run("brew", "test", FORMULA)
             minimal = dict(isolated, PATH="/usr/bin:/bin:" + str(prefix / "bin"))
@@ -102,7 +115,7 @@ def main():
             assert "Requested security checks passed" in out, out
 
         stage(first)
-        run("brew", "install", "--formula", FORMULA)
+        brew_step("brew", "install", "--formula", FORMULA)
         installed(first)
         run(str(cli), "init", cwd=repo, env=isolated)
         run(str(cli), "install-hook", cwd=repo, env=isolated)
@@ -122,20 +135,20 @@ def main():
             assert digest(repo / ".git" / "config") == config
             assert digest(repo / ".git" / "hooks" / "pre-commit") == hook
 
-        run("brew", "reinstall", "--formula", FORMULA)
+        brew_step("brew", "reinstall", "--formula", FORMULA)
         installed(first)
         preserved()
         stage(second)
-        run("brew", "upgrade", "--formula", FORMULA)
+        brew_step("brew", "upgrade", "--formula", FORMULA)
         installed(second)
         run("git", "commit", "--allow-empty", "-qm", "after upgrade", cwd=repo, env=hook_env)
         preserved()
-        run("brew", "uninstall", "--formula", "git-safety")
+        brew_step("brew", "uninstall", "--formula", "git-safety")
         failed = run("git", "commit", "--allow-empty", "-qm", "no cli", cwd=repo, env=hook_env, expected=1)  # git reports any hook failure as 1
         assert "command not found" in failed, failed
         preserved()
         stage(first)  # restore the previously known version
-        run("brew", "install", "--formula", FORMULA)
+        brew_step("brew", "install", "--formula", FORMULA)
         installed(first)
         run("git", "commit", "--allow-empty", "-qm", "restored", cwd=repo, env=hook_env)
         preserved()
