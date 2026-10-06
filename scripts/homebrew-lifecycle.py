@@ -92,6 +92,7 @@ def main():
             run("brew", "test", FORMULA)
             minimal = dict(isolated, PATH="/usr/bin:/bin:" + str(prefix / "bin"))
             assert f"git-safety {version}" in run(str(cli), "--version", env=minimal)
+            run(str(cli), "init", cwd=repo, env=isolated)  # idempotent; staged needs project rules
             # A stale scanner earlier on PATH must not displace the declared dependency.
             stale = work / "stale"
             stale.mkdir(exist_ok=True)
