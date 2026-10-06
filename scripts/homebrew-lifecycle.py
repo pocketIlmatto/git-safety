@@ -143,7 +143,10 @@ def main():
         installed(second)
         run("git", "commit", "--allow-empty", "-qm", "after upgrade", cwd=repo, env=hook_env)
         preserved()
-        brew_step("brew", "uninstall", "--formula", "git-safety")
+        # Cleanup is disabled above, so the upgrade left the old keg behind; remove every version.
+        brew_step("brew", "uninstall", "--formula", "--force", "git-safety")
+        assert subprocess.run(["brew", "list", "--formula", "git-safety"], stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL).returncode != 0, "a git-safety keg survived uninstall"
         failed = run("git", "commit", "--allow-empty", "-qm", "no cli", cwd=repo, env=hook_env, expected=1)  # git reports any hook failure as 1
         assert "command not found" in failed, failed
         preserved()
