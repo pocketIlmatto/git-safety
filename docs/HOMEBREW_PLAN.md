@@ -1,7 +1,9 @@
 # Homebrew tap implementation plan
 
-Status: planned, not implemented or published. All work in this planning task is
-documentation in git-safety. Hammerspoon migration stays separate.
+Status: checkpoints 1, 2 and 4 are implemented locally; checkpoint 3's lifecycle test
+is written but has not been run; checkpoint 5 (publication) has not started. See
+[HOMEBREW.md](HOMEBREW.md), [RELEASING.md](RELEASING.md) and the evidence notes in
+[NEXT_STEPS.md](../NEXT_STEPS.md). Hammerspoon migration stays separate.
 
 ## Intended experience
 
