@@ -131,7 +131,7 @@ def main():
         run("git", "commit", "--allow-empty", "-qm", "after upgrade", cwd=repo, env=hook_env)
         preserved()
         run("brew", "uninstall", "--formula", "git-safety")
-        failed = run("git", "commit", "--allow-empty", "-qm", "no cli", cwd=repo, env=hook_env, expected=2)
+        failed = run("git", "commit", "--allow-empty", "-qm", "no cli", cwd=repo, env=hook_env, expected=1)  # git reports any hook failure as 1
         assert "command not found" in failed, failed
         preserved()
         stage(first)  # restore the previously known version
