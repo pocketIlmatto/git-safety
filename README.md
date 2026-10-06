@@ -10,8 +10,9 @@ each commit.
 
 ## Installation
 
-For now, install from a local copy of this repository. There isn't a Homebrew
-formula or Python package for `git-safety` yet.
+For now, install from a local copy of this repository. A Homebrew formula is
+prepared but not published yet; see [Homebrew installation](docs/HOMEBREW.md). There
+isn't a Python package for `git-safety`.
 
 ### 1. Check the dependencies
 

@@ -1,0 +1,6 @@
+#!/bin/bash
+# Installed by the git-safety Homebrew formula; do not edit.
+# Declared dependencies take precedence over stale copies; the rest of PATH is kept.
+export PATH=@DEPENDENCY_PATH@${PATH:+:$PATH}
+export PYTHONDONTWRITEBYTECODE=1
+exec @PYTHON@ -I -B @LIBEXEC@/git_safety/cli.py "$@"

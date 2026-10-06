@@ -1,0 +1,77 @@
+class GitSafety < Formula
+  desc "Local Git privacy and credential checks"
+  homepage "https://github.com/pocketIlmatto/git-safety"
+  url "@URL@"
+  sha256 "@SHA256@"
+@LICENSE@
+  depends_on "git"
+  depends_on "gitleaks"
+  depends_on "python@3.14"
+  depends_on "ripgrep"
+
+  def install
+    libexec.install "git_safety"
+
+    python = formula_opt_bin("python@3.14")/"python3.14"
+    dependency_path = %w[git ripgrep gitleaks].map { |name| formula_opt_bin(name).to_s }.join(":")
+
+    # The supported Gitleaks range lives in the package; fail the install clearly if
+    # the current dependency is outside it. The wrapper repeats this check at run time.
+    validator = <<~PYTHON
+      import sys
+      sys.path.insert(0, sys.argv[1])
+      from git_safety import common, secrets
+      try:
+          secrets.check_dependency()
+      except common.SafetyError as error:
+          sys.exit(f"git-safety: {error}")
+    PYTHON
+    with_env(PATH: "#{dependency_path}:#{ENV.fetch("PATH", nil)}") do
+      system python, "-I", "-B", "-c", validator, libexec
+    end
+
+    wrapper = (buildpath/"packaging/homebrew/git-safety.sh.in").read
+    wrapper.gsub!("@DEPENDENCY_PATH@", dependency_path.shellescape)
+    wrapper.gsub!("@PYTHON@", python.to_s.shellescape)
+    wrapper.gsub!("@LIBEXEC@", libexec.to_s.shellescape)
+    (bin/"git-safety").write wrapper
+    (bin/"git-safety").chmod 0555
+  end
+
+  def caveats
+    <<~EOS
+      Run `git-safety init` in a project to create its rules, then optionally
+      `git-safety install-hook`. Installing this formula changes no project.
+      Before uninstalling for good, run `git-safety uninstall-hook` in each project.
+    EOS
+  end
+
+  test do
+    ENV["HOME"] = testpath
+    ENV["GIT_CONFIG_GLOBAL"] = File::NULL
+    ENV["GIT_CONFIG_NOSYSTEM"] = "1"
+    assert_match "git-safety #{version}", shell_output("#{bin}/git-safety --version")
+
+    repo = testpath/"repo"
+    (repo/"nested/deeper").mkpath
+    cd repo do
+      system "git", "init", "-q"
+      system "git", "config", "user.name", "Formula Test"
+      system "git", "config", "user.email", "formula-test@example.com"
+      system "git", "config", "core.hooksPath", File::NULL
+      system bin/"git-safety", "init"
+      (repo/"clean.txt").write "nothing sensitive\n"
+      system "git", "add", "."
+      cd "nested/deeper" do
+        assert_match "Requested security checks passed", shell_output("#{bin}/git-safety staged")
+      end
+
+      token = %w[ghp_ aB3dE6gH9jK2mN5pQ8sT1vW4yZ7cF0iL3oR6].join
+      (repo/"credential.txt").write token
+      system "git", "add", "credential.txt"
+      output = shell_output("#{bin}/git-safety staged 2>&1", 1)
+      assert_match "staged secrets: findings", output
+      refute_match token, output
+    end
+  end
+end

@@ -1,6 +1,7 @@
 # Choosing an installation experience
 
-Only **local checkout + symlink** is implemented today. The other options below
+Only **local checkout + symlink** is usable today. The Homebrew tap is prepared
+locally but unpublished (see [HOMEBREW.md](HOMEBREW.md)). The other options below
 are proposals, not installation commands you can use with this project yet.
 
 The main difficulty is dependency setup: this is a Python CLI that also runs

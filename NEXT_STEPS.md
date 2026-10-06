@@ -13,3 +13,10 @@ See docs/GITLEAKS_COMPATIBILITY.md. The toolkit tap/release archives remain next
 2026-09-22 plan: See docs/HOMEBREW_PLAN.md for implementation checkpoints,
 packaging/lifecycle tests, release decisions, and publication boundaries. One
 bounded sub-agent review informed the plan; implementation has not started.
+
+2026-10-06 status: Homebrew checkpoints 1, 2 and 4 implemented locally (release
+builder, formula template/renderer/wrapper, docs, Mac CI workflow). `brew style` and
+`brew audit --strict` pass in a Linuxbrew container. Not done: running
+scripts/homebrew-lifecycle.py (needs a disposable Homebrew with network access; first run
+via the Mac workflow), choosing a license, and publication (tag, release, tap repo), which
+need owner authorization. See docs/HOMEBREW.md and docs/RELEASING.md.

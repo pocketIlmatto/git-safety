@@ -1,0 +1,39 @@
+name: Homebrew packaging
+
+on:
+  pull_request:
+    paths:
+      - 'packaging/**'
+      - 'scripts/build-release.py'
+      - 'scripts/render-formula.py'
+      - 'scripts/homebrew-lifecycle.py'
+      - 'git_safety/**'
+      - '.github/workflows/homebrew.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packaging:
+    name: Mac packaging smoke test
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install dependencies for the repository tests
+        run: brew install python@3.14 ripgrep gitleaks
+      - name: Release and wrapper tests
+        run: python3.14 -B -m unittest tests.test_release tests.test_packaging -v
+      - name: Install, upgrade, uninstall and restore through a local tap
+        env:
+          GIT_SAFETY_DISPOSABLE_BREW: '1'
+        run: python3.14 -B scripts/homebrew-lifecycle.py
